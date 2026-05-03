@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Визуализация Алгоритма Грэхема</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #f4f4f9; }
+        canvas { background: white; border: 2px solid #333; cursor: crosshair; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .controls { margin-top: 15px; width: 600px; display: flex; justify-content: space-between; }
+        button { padding: 10px 20px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; transition: 0.3s; }
+        #clearBtn { background-color: #9e9e9e; color: white; }
+        #clearBtn:hover { background-color: #757575; }
+        #stepBtn { background-color: #2196F3; color: white; margin-right: 10px; }
+        #stepBtn:hover { background-color: #1976D2; }
+        #resultBtn { background-color: #4CAF50; color: white; }
+        #resultBtn:hover { background-color: #388E3C; }
+        .right-btns { display: flex; }
+    </style>
+</head>
+<body>
+
+    <h2>Алгоритм Грэхема: Визуализация</h2>
+    <canvas id="canvas" width="600" height="400"></canvas>
+
+    <div class="controls">
+        <button id="clearBtn">Очистить поле</button>
+        <div class="right-btns">
+            <button id="stepBtn">Сделать шаг</button>
+            <button id="resultBtn">Результат</button>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let points = [];
+    let stack = [];
+    let sortedPoints = [];
+    let currentIdx = 0;
+    let isFinished = false;
+
+    // Кросс-браузерное векторное произведение
+    const crossProduct = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - b.x);
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (isFinished) resetAlgorithm();
+        const rect = canvas.getBoundingClientRect();
+        points.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        draw();
+    });
+
+    document.getElementById('clearBtn').onclick = () => {
+        points = [];
+        resetAlgorithm();
+        draw();
+    };
+
+    document.getElementById('resultBtn').onclick = () => {
+        if (points.length < 3) return;
+        resetAlgorithm();
+        preparePoints();
+        while (!isFinished) step();
+        draw();
+    };
+
+    document.getElementById('stepBtn').onclick = () => {
+        if (points.length < 3) return;
+        if (sortedPoints.length === 0) preparePoints();
+        step();
+        draw();
+    };
+
+    function resetAlgorithm() {
+        stack = [];
+        sortedPoints = [];
+        currentIdx = 0;
+        isFinished = false;
+    }
+
+    function preparePoints() {
+        // 1. Находим стартовую точку (самая нижняя)
+        let p0 = points.reduce((min, p) => (p.y > min.y || (p.y === min.y && p.x < min.x) ? p : min), points[0]);
+        
+        // 2. Сортируем по полярному углу
+        sortedPoints = points.slice().sort((a, b) => {
+            let cp = crossProduct(p0, a, b);
+            if (cp === 0) return (Math.hypot(p0.x-a.x, p0.y-a.y) - Math.hypot(p0.x-b.x, p0.y-b.y));
+            return -cp;
+        });
+
+        stack = [sortedPoints[0], sortedPoints[1]];
+        currentIdx = 2;
+    }
+
+    function step() {
+        if (currentIdx >= sortedPoints.length) {
+            isFinished = true;
+            return;
+        }
+
+        let p = sortedPoints[currentIdx];
+        while (stack.length >= 2 && crossProduct(stack[stack.length - 2], stack[stack.length - 1], p) <= 0) {
+            stack.pop();
+        }
+        stack.push(p);
+        currentIdx++;
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Рисуем точки
+        points.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#333';
+            ctx.fill();
+        });// Рисуем оболочку из стека
+        if (stack.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(stack[0].x, stack[0].y);
+            for (let i = 1; i < stack.length; i++) ctx.lineTo(stack[i].x, stack[i].y);
+            if (isFinished) ctx.closePath();
+            ctx.strokeStyle = '#4CAF50';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // Подсвечиваем текущую рассматриваемую точку синим
+        if (currentIdx > 0 && currentIdx < sortedPoints.length && !isFinished) {
+            ctx.beginPath();
+            ctx.arc(sortedPoints[currentIdx].x, sortedPoints[currentIdx].y, 7, 0, Math.PI * 2);
+            ctx.strokeStyle = '#2196F3';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+    }
+</script>
+</body>
+</html>
