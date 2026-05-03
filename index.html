@@ -38,103 +38,134 @@
     let sortedPoints = [];
     let currentIdx = 0;
     let isFinished = false;
-
-    // Кросс-браузерное векторное произведение
-    const crossProduct = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - b.x);
-
+    
+    // 1. Векторное произведение с учетом инвертированной оси Y в Canvas
+    // Возвращает > 0 для левого поворота, < 0 для правого, 0 если коллинеарны
+    function crossProduct(a, b, c) {
+        return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - b.x);
+    }
+    
+    // Расстояние между точками (для сортировки коллинеарных точек)
+    function distSq(a, b) {
+        return (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+    }
+    
     canvas.addEventListener('mousedown', (e) => {
         if (isFinished) resetAlgorithm();
         const rect = canvas.getBoundingClientRect();
         points.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
         draw();
     });
-
+    
     document.getElementById('clearBtn').onclick = () => {
         points = [];
         resetAlgorithm();
         draw();
     };
-
+    
     document.getElementById('resultBtn').onclick = () => {
         if (points.length < 3) return;
         resetAlgorithm();
         preparePoints();
-        while (!isFinished) step();
+        while (currentIdx < sortedPoints.length) step();
+        isFinished = true;
         draw();
     };
-
+    
     document.getElementById('stepBtn').onclick = () => {
         if (points.length < 3) return;
         if (sortedPoints.length === 0) preparePoints();
-        step();
+        if (!isFinished) step();
         draw();
     };
-
+    
     function resetAlgorithm() {
         stack = [];
         sortedPoints = [];
         currentIdx = 0;
         isFinished = false;
     }
-
+    
     function preparePoints() {
-        // 1. Находим стартовую точку (самая нижняя)
-        let p0 = points.reduce((min, p) => (p.y > min.y || (p.y === min.y && p.x < min.x) ? p : min), points[0]);
-        
-        // 2. Сортируем по полярному углу
-        sortedPoints = points.slice().sort((a, b) => {
+        // Находим стартовую точку P0 (самая нижняя, затем самая левая)
+        // В Canvas "нижняя" - это МАКСИМАЛЬНЫЙ Y
+        let p0 = points[0];
+        for (let p of points) {
+            if (p.y > p0.y || (p.y === p0.y && p.x < p0.x)) p0 = p;
+        }
+    
+        // Сортируем остальные точки по полярному углу относительно p0
+        const others = points.filter(p => p !== p0);
+        others.sort((a, b) => {
             let cp = crossProduct(p0, a, b);
-            if (cp === 0) return (Math.hypot(p0.x-a.x, p0.y-a.y) - Math.hypot(p0.x-b.x, p0.y-b.y));
-            return -cp;
+            if (cp === 0) return distSq(p0, a) - distSq(p0, b);
+            return cp > 0 ? -1 : 1; // Мы хотим левый поворот (против часовой)
         });
-
+    
+        sortedPoints = [p0, ...others];
         stack = [sortedPoints[0], sortedPoints[1]];
         currentIdx = 2;
     }
-
+    
     function step() {
         if (currentIdx >= sortedPoints.length) {
             isFinished = true;
             return;
         }
-
+    
         let p = sortedPoints[currentIdx];
+        
+        // Пока поворот не левый (или точки на одной прямой) — выкидываем из стека
+        // ВАЖНО: crossProduct <= 0 отсекает правые повороты и коллинеарные точки
         while (stack.length >= 2 && crossProduct(stack[stack.length - 2], stack[stack.length - 1], p) <= 0) {
             stack.pop();
         }
+        
         stack.push(p);
         currentIdx++;
     }
-
+    
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Рисуем точки
+        // Рисуем все точки
         points.forEach(p => {
             ctx.beginPath();
             ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
             ctx.fillStyle = '#333';
             ctx.fill();
-        });// Рисуем оболочку из стека
+        });
+    
+        // Рисуем линии из стека
         if (stack.length > 1) {
             ctx.beginPath();
             ctx.moveTo(stack[0].x, stack[0].y);
-            for (let i = 1; i < stack.length; i++) ctx.lineTo(stack[i].x, stack[i].y);
-            if (isFinished) ctx.closePath();
+            for (let i = 1; i < stack.length; i++) {
+                ctx.lineTo(stack[i].x, stack[i].y);
+            }
+            
+            // Замыкаем оболочку только если алгоритм завершен
+            if (isFinished) {
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(76, 175, 80, 0.2)';
+                ctx.fill();
+            }
+    
             ctx.strokeStyle = '#4CAF50';
             ctx.lineWidth = 2;
             ctx.stroke();
         }
-
-        // Подсвечиваем текущую рассматриваемую точку синим
+    
+        // Индикация активной точки (шаг алгоритма)
         if (currentIdx > 0 && currentIdx < sortedPoints.length && !isFinished) {
             ctx.beginPath();
-            ctx.arc(sortedPoints[currentIdx].x, sortedPoints[currentIdx].y, 7, 0, Math.PI * 2);
-            ctx.strokeStyle = '#2196F3';
-            ctx.lineWidth = 3;
+            ctx.arc(sortedPoints[currentIdx].x, sortedPoints[currentIdx].y, 8, 0, Math.PI * 2);
+            ctx.strokeStyle = '#FF5722';
+            ctx.lineWidth = 2;
             ctx.stroke();
         }
     }
+
 </script>
 </body>
 </html>
