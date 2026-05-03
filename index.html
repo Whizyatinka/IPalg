@@ -2,26 +2,21 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Визуализация Алгоритма Грэхема</title>
+    <title>Graham Scan Visualizer</title>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #f4f4f9; }
         canvas { background: white; border: 2px solid #333; cursor: crosshair; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         .controls { margin-top: 15px; width: 600px; display: flex; justify-content: space-between; }
         button { padding: 10px 20px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; transition: 0.3s; }
         #clearBtn { background-color: #9e9e9e; color: white; }
-        #clearBtn:hover { background-color: #757575; }
         #stepBtn { background-color: #2196F3; color: white; margin-right: 10px; }
-        #stepBtn:hover { background-color: #1976D2; }
         #resultBtn { background-color: #4CAF50; color: white; }
-        #resultBtn:hover { background-color: #388E3C; }
         .right-btns { display: flex; }
     </style>
 </head>
 <body>
-
-    <h2>Алгоритм Грэхема: Визуализация</h2>
+    <h2>Алгоритм Грэхема</h2>
     <canvas id="canvas" width="600" height="400"></canvas>
-
     <div class="controls">
         <button id="clearBtn">Очистить поле</button>
         <div class="right-btns">
@@ -33,135 +28,109 @@
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    let points = [];
-    let stack = [];
-    let sortedPoints = [];
-    let currentIdx = 0;
-    let isFinished = false;
+    let points = [], stack = [], sortedPoints = [], currentIdx = 0, isFinished = false;
 
     function getOrientation(p, q, r) {
         const val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
-        if (Math.abs(val) < 1e-9) return 0; 
-        return (val > 0) ? 2 : 1; 
+        if (Math.abs(val) < 1e-9) return 0;
+        return (val > 0) ? 1 : 2;
     }
-    
+
     function distSq(p1, p2) {
         return (p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2;
     }
-    
+
     canvas.addEventListener('mousedown', (e) => {
         const rect = canvas.getBoundingClientRect();
         points.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
         resetAlgorithm();
         draw();
     });
-    
+
     document.getElementById('clearBtn').onclick = () => {
         points = [];
         resetAlgorithm();
         draw();
     };
-    
+
     document.getElementById('resultBtn').onclick = () => {
         if (points.length < 3) return;
         resetAlgorithm();
         preparePoints();
-        while (currentIdx < sortedPoints.length) step();
-        isFinished = true;
+        while (!isFinished) step();
         draw();
     };
-    
+
     document.getElementById('stepBtn').onclick = () => {
-        if (points.length < 3) return;
+        if (points.length === 0) return;
         if (sortedPoints.length === 0) preparePoints();
-        if (!isFinished) step();
+        step();
         draw();
     };
-    
+
     function resetAlgorithm() {
-        stack = [];
-        sortedPoints = [];
-        currentIdx = 0;
-        isFinished = false;
+        stack = []; sortedPoints = []; currentIdx = 0; isFinished = false;
     }
-    
+
     function preparePoints() {
-        if (points.length < 3) return;
-    
-        let minY = points[0].y;
-        let minIdx = 0;
+        if (points.length === 0) return;
+        let p0 = points[0], minIdx = 0;
         for (let i = 1; i < points.length; i++) {
-            let y = points[i].y;
-            if (y > minY || (y === minY && points[i].x < points[minIdx].x)) {
-                minY = points[i].y;
-                minIdx = i;
+            if (points[i].y > p0.y || (points[i].y === p0.y && points[i].x < p0.x)) {
+                p0 = points[i]; minIdx = i;
             }
         }
-    
-        let temp = points[0];
-        points[0] = points[minIdx];
-        points[minIdx] = temp;
-    
-        let p0 = points[0];
-    
-        let others = points.slice(1);
+        let others = points.filter((_, i) => i !== minIdx);
         others.sort((a, b) => {
             let o = getOrientation(p0, a, b);
             if (o === 0) return distSq(p0, a) - distSq(p0, b);
             return (o === 2) ? -1 : 1;
         });
-    
         sortedPoints = [p0, ...others];
-        stack = [sortedPoints[0], sortedPoints[1], sortedPoints[2]];
-        currentIdx = 3;
     }
-    
+
     function step() {
-        if (isFinished) return;
-        if (currentIdx >= sortedPoints.length) {
+        if (isFinished || sortedPoints.length === 0) return;
+        if (currentIdx === 0) {
+            stack.push(sortedPoints[0]);
+            currentIdx++;
+        } else if (currentIdx === 1 && sortedPoints.length > 1) {
+            stack.push(sortedPoints[1]);
+            currentIdx++;
+        } else if (currentIdx < sortedPoints.length) {
+            let p = sortedPoints[currentIdx];
+            while (stack.length >= 2 && getOrientation(stack[stack.length - 2], stack[stack.length - 1], p) !== 2) {
+                stack.pop();
+            }
+            stack.push(p);
+            currentIdx++;
+        } else {
             isFinished = true;
-            return;
         }
-    
-        while (stack.length >= 2 && getOrientation(stack[stack.length - 2], stack[stack.length - 1], sortedPoints[currentIdx]) !== 2) {
-            stack.pop();
-        }
-        
-        stack.push(sortedPoints[currentIdx]);
-        currentIdx++;
-        
-        if (currentIdx === sortedPoints.length) isFinished = true;
     }
-    
+
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
         points.forEach(p => {
             ctx.beginPath();
             ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
             ctx.fillStyle = "#333";
             ctx.fill();
         });
-    
-        if (stack.length > 1) {
+        if (stack.length > 0) {
             ctx.beginPath();
             ctx.moveTo(stack[0].x, stack[0].y);
-            for (let i = 1; i < stack.length; i++) {
-                ctx.lineTo(stack[i].x, stack[i].y);
-            }
-            if (isFinished) ctx.closePath();
-            
+            for (let i = 1; i < stack.length; i++) ctx.lineTo(stack[i].x, stack[i].y);
+            if (isFinished && points.length >= 3) ctx.closePath();
             ctx.strokeStyle = "#4CAF50";
             ctx.lineWidth = 3;
             ctx.stroke();
-            
-            if (isFinished) {
+            if (isFinished && points.length >= 3) {
                 ctx.fillStyle = "rgba(76, 175, 80, 0.2)";
                 ctx.fill();
             }
         }
-    
-        if (currentIdx < sortedPoints.length && sortedPoints.length > 0 && !isFinished) {
+        if (currentIdx < sortedPoints.length && !isFinished) {
             ctx.beginPath();
             ctx.arc(sortedPoints[currentIdx].x, sortedPoints[currentIdx].y, 8, 0, Math.PI * 2);
             ctx.strokeStyle = "#FF5722";
